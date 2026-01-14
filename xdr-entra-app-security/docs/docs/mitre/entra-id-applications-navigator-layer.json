@@ -1,0 +1,124 @@
+
+{
+  "name": "Entra ID Application & Service Principal Abuse",
+  "version": "4.4",
+  "description": "MITRE ATT&CK mapping for securing, detecting, and investigating abuse of Entra ID applications and service principals using Defender XDR.",
+  "domain": "enterprise-attack",
+  "filters": {
+    "platforms": [
+      "Azure Active Directory",
+      "Office 365",
+      "SaaS"
+    ]
+  },
+  "techniques": [
+    {
+      "techniqueID": "T1078",
+      "tactic": "initial-access",
+      "score": 3,
+      "comment": "Stolen service principal credentials used for non-interactive authentication."
+    },
+    {
+      "techniqueID": "T1528",
+      "tactic": "credential-access",
+      "score": 3,
+      "comment": "Theft or abuse of OAuth access tokens issued to Entra ID applications."
+    },
+    {
+      "techniqueID": "T1098",
+      "tactic": "persistence",
+      "score": 3,
+      "comment": "Account manipulation via application or service principal modification."
+    },
+    {
+      "techniqueID": "T1098.003",
+      "tactic": "persistence",
+      "score": 3,
+      "comment": "Credentials added to a high-privilege service principal to establish persistence."
+    },
+    {
+      "techniqueID": "T1136",
+      "tactic": "persistence",
+      "score": 2,
+      "comment": "Creation of new applications or service principals to maintain long-term access."
+    },
+    {
+      "techniqueID": "T1550",
+      "tactic": "defense-evasion",
+      "score": 2,
+      "comment": "Alternate authentication material used by applications to bypass MFA."
+    },
+    {
+      "techniqueID": "T1552.004",
+      "tactic": "credential-access",
+      "score": 2,
+      "comment": "Private key or certificate theft associated with Entra ID applications."
+    },
+    {
+      "techniqueID": "T1087",
+      "tactic": "discovery",
+      "score": 2,
+      "comment": "Account enumeration via Microsoft Graph using compromised app permissions."
+    },
+    {
+      "techniqueID": "T1069",
+      "tactic": "discovery",
+      "score": 2,
+      "comment": "Discovery of directory roles and groups via Microsoft Graph APIs."
+    },
+    {
+      "techniqueID": "T1114",
+      "tactic": "collection",
+      "score": 3,
+      "comment": "Email collection performed by compromised applications using Exchange APIs."
+    },
+    {
+      "techniqueID": "T1213",
+      "tactic": "collection",
+      "score": 3,
+      "comment": "Data collection from SharePoint or OneDrive using Graph permissions."
+    },
+    {
+      "techniqueID": "T1537",
+      "tactic": "exfiltration",
+      "score": 2,
+      "comment": "Large-scale data transfer to attacker-controlled cloud storage."
+    },
+    {
+      "techniqueID": "T1071.001",
+      "tactic": "command-and-control",
+      "score": 2,
+      "comment": "Graph and REST API usage over HTTPS from anomalous ASN or geography."
+    },
+    {
+      "techniqueID": "T1486",
+      "tactic": "impact",
+      "score": 1,
+      "comment": "Indirect impact via application-enabled destructive actions."
+    }
+  ],
+  "legendItems": [
+    {
+      "label": "High-Fidelity Detection",
+      "color": "#d93f0b"
+    },
+    {
+      "label": "Moderate Detection",
+      "color": "#fb8f44"
+    },
+    {
+      "label": "Contextual / Investigative",
+      "color": "#fed77e"
+    }
+  ],
+  "metadata": [
+    {
+      "name": "Telemetry",
+      "value": "Microsoft Defender XDR, Entra ID, Microsoft Defender for Cloud Apps"
+    },
+    {
+      "name": "Author",
+      "value": "Tom Grages – Defender XDR / Entra ID Lab"
+    }
+  ]
+}

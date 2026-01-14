@@ -1,0 +1,3 @@
+CloudAppEvents
+| where AppId != ""
+| where ActionType contains "Graph"
