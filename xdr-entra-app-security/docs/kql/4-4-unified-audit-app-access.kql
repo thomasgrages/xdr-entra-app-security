@@ -1,0 +1,18 @@
+// STEP 4.4 – Application Data Access via Unified Audit Log
+// Purpose: Confirm data access performed by compromised apps
+
+OfficeActivity
+| where UserType == "Application"
+| where RecordType in (
+  "SharePointFileOperation",
+  "ExchangeItem"
+)
+| project
+  TimeGenerated,
+  RecordType,
+  Operation,
+  Workload,
+  SourceFileName,
+  SiteUrl,
+  ClientIP
+| order by TimeGenerated desc

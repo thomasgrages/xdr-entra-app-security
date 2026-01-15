@@ -1,3 +1,0 @@
-SigninLogs
-| where SignInType == "ServicePrincipal"
-| project TimeGenerated, AppDisplayName, IPAddress, ResourceDisplayName, Location

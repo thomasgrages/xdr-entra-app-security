@@ -1,91 +1,140 @@
 
-# Defender XDR Lab: Securing, Detecting & Investigating Entra ID Applications
+# Entra ID Workload Identity Security Lab  
+## Detecting and Investigating Application & Service Principal Compromise (Defender‑Assisted)
 
-## Lab Objective
-This lab teaches how to secure Entra ID applications, detect their compromise, and investigate malicious app activity using Defender XDR.
-
----
-
-## Section 1 – Understanding the App Threat Model
-
-### Key Objects
-| Object | Description |
-|------|-------------|
-| Application | Blueprint |
-| Service Principal | Runtime identity |
-| Credential | Primary attacker target |
-| Permissions | Blast radius |
+> **Purpose**  
+This lab provides a prescriptive, end‑to‑end walkthrough for securing Microsoft Entra ID applications and service principals, **detecting application compromise**, and **investigating malicious workload identity activity** using Microsoft Defender–integrated telemetry (Entra ID, Defender for Cloud Apps, Microsoft Graph, and audit logs).  
+The focus is on **application and service principal compromise**, with Defender used for detection and investigation — not full cross‑endpoint XDR correlation.
 
 ---
 
-## Section 2 – Secure Entra ID Applications
+## 0. Prerequisites (Exact)
 
-### 2.1 Use Managed Identities
-- Replace secrets and certificates where possible
-- Validate no credentials exist
+### Licensing
+- Microsoft Entra ID (P1 minimum, **P2 recommended**)
+- Microsoft Defender for Cloud Apps
+- Microsoft Defender (M365 security portal access for audit, alerts, hunting)
 
-### 2.2 Apply Least Privilege
-- Minimize Graph permissions
-- Prefer resource-specific consent
+### Required Roles
+- **Cloud Application Administrator**
+- **Global Reader**
+- **Security Reader** or **Security Operator**
+- Azure RBAC role for managed identity testing (e.g., **Storage Blob Data Reader**)
 
-### 2.3 Ownership Model
-- Remove direct owners from high-priv apps
-- Govern via Entra ID roles
+### Portals
+- Entra Admin Center: https://entra.microsoft.com
+- Microsoft 365 Defender portal: https://security.microsoft.com
+- Defender for Cloud Apps: https://portal.cloudappsecurity.com
 
-### 2.4 Credential Hardening
+---
+
+## 1. Threat Model – How Applications Get Compromised
+
+| Attack Vector | Description |
+|--------------|-------------|
+| Credential theft | Secrets or certificates stolen from pipelines, repos, or disk |
+| Permission abuse | Over‑privileged Graph or M365 permissions |
+| Persistence | Attacker adds new credentials to existing app |
+| Supply chain | Compromised multi‑tenant SaaS app |
+| Token abuse | OAuth access tokens reused from abnormal location |
+
+> **Key insight:** Service principals authenticate non‑interactively — attackers love them because MFA, device state, and user behavior analytics are bypassed.
+
+---
+
+## 2. Secure Configuration (Foundation)
+
+*(Keep these steps — they directly reduce blast radius and false positives during detection.)*
+
+### 2.1 Prefer Managed Identities
+- Use **system‑assigned managed identities** where possible
+- Assign **minimal Azure RBAC**
+- No secrets, no certificates, no rotation risk
+
+---
+
+### 2.2 Least‑Privilege App Registration
+
+1. Entra → **App registrations** → **New registration**
+   - Name: `Lab-LeastPrivilege-App`
+   - Single tenant
+2. **API permissions**
+   - Microsoft Graph → **Application permissions**
+   - Add only what is required (example: `User.Read.All`)
+3. Grant admin consent
+
+🚫 Avoid:
+- `Directory.ReadWrite.All`
+- `Sites.ReadWrite.All`
+
+---
+
+### 2.3 Ownership & Governance
+
+- Remove **direct owners** from high‑priv apps
+- Manage apps using **Entra ID roles (PIM)**
+- Recommended role: `Cloud Application Administrator` (eligible)
+
+---
+
+### 2.4 Credential Hygiene
+
+**Preferred**
 - Certificates over secrets
-- Rotate credentials
-- Disable unused credentials
 
-### 2.5 Remove Unused Apps
-- Identify stale service principals
-- Remove abandoned multitenant apps
-
----
-
-## Section 3 – Detect App Compromise
-
-### Key Signals
-- New application creation
-- Credential additions
-- Unexpected admin consent
-- New resource access
-- ASN / geo anomalies
-
-> Defender for Cloud Apps and Entra audit logs provide most of this telemetry.
+**If secrets**
+- Expiry: **≤ 90 days**
+- Store in **Azure Key Vault**
+- Rotate aggressively
 
 ---
 
-## Section 4 – Investigate Using Defender XDR
+## 3. Detection – Identifying App Compromise (Defender Coverage)
 
-### 4.1 Service Principal Sign-ins
-- Non-interactive sign-ins
-- IP, ASN, location review
+### 3.1 OAuth App Detections (Defender for Cloud Apps)
 
-### 4.2 Audit Logs
-- Credential additions
-- Permission changes
-- Persistence creation
+Navigate: **Control → Policies → OAuth app**
 
-### 4.3 Microsoft Graph Usage
-- Directory enumeration
-- Mailbox or site access
+Create / enable:
 
-### 4.4 Unified Audit Log
-- SharePoint access
-- Exchange mailbox reads
+| Policy | Signal |
+|------|-------|
+| OAuth app – High permissions granted | Privilege escalation |
+| OAuth app – New admin consent | Unauthorized permission grant |
+| OAuth app – Credentials added | Persistence |
+| OAuth app – Unknown publisher | Supply‑chain risk |
+| OAuth app – Mass user consent | Abuse or phishing |
 
----
-
-## Section 5 – Incident Response Actions
-
-1. Disable service principal
-2. Remove credentials
-3. Revoke permissions
-4. Assess data exposure
-5. Destroy attacker persistence
+Severity guidance:
+- High permissions / credential addition → **High**
+- Unknown publisher / mass consent → **Medium**
 
 ---
 
-## Outcome
-Security teams gain visibility, control, and confidence in defending Entra ID application identities.
+### 3.2 Entra ID Audit Log Detections (High‑Confidence)
+
+Monitor these events:
+
+- **Add service principal credentials**
+- **Update application – Certificates and secrets**
+- **Grant admin consent to application**
+- **Add application**
+- **Add service principal**
+
+These are **near‑certain indicators** of attacker persistence when unexpected.
+
+---
+
+## 4. Investigation – Defender‑Led App Compromise Workflow
+
+> This section mirrors real incident response: **alert → validation → scope → impact → response**
+
+---
+
+### 4.1 Validate Service Principal Sign‑ins
+
+```kusto
+SigninLogs
+| where SignInType == "ServicePrincipal"
+| project TimeGenerated, AppDisplayName, AppId, IPAddress, Location
+| order by TimeGenerated desc

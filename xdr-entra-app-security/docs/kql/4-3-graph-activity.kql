@@ -1,0 +1,14 @@
+// STEP 4.3 – Microsoft Graph Abuse by Applications
+// Purpose: Detect anomalous Graph access by service principals
+
+CloudAppEvents
+| where AccountType == "Application"
+| where ServiceSource == "MicrosoftGraph"
+| project
+  Timestamp,
+  Application,
+  ActionType,
+  IPAddress,
+  Country,
+  UserAgent
+| order by Timestamp desc
