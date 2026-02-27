@@ -3,6 +3,26 @@
     "MicrosoftLearn": {
       "type": "http",
       "url": "https://learn.microsoft.com/api/mcp"
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest"],
+      "type": "stdio"
+    },
+    "context7": {
+      "type": "http",
+      "url": "https://mcp.context7.com/mcp",
+      "headers": {
+        "CONTEXT7_API_KEY": "${input:context7ApiKey}"
+      }
     }
-  }
+  },
+  "inputs": [
+    {
+      "id": "context7ApiKey",
+      "type": "promptString",
+      "description": "Context7 API Key (get one at https://context7.com)",
+      "password": true
+    }
+  ]
 }
