@@ -73,19 +73,186 @@ Infrastructure is the **highest-weight section AND your weakest area** — fixin
 - **Security baselines** — preconfigured templates for Windows, Edge, Defender for Endpoint, Microsoft 365 Apps
 - **Conditional Access integration:** Device must be compliant + user risk = low → grant access
 
-#### Application Control (CRITICAL exam topic)
+#### Application Control — Deep Dive (CRITICAL exam topic)
+
+##### WDAC vs. AppLocker — Full Comparison
+
 | Feature | WDAC | AppLocker |
 |---------|------|-----------|
-| Mode | Kernel + User | User only |
-| Management | Intune, GPO, SCCM, PowerShell | GPO only |
-| Managed installer | ✅ | ❌ |
+| Enforcement scope | **Kernel mode + user mode** | User mode only |
+| Blocks drivers/kernel code | ✅ | ❌ |
+| Management options | Intune, GPO, SCCM, MDM, PowerShell | GPO only |
+| Managed installer support | ✅ | ❌ |
 | Intelligent Security Graph (ISG) | ✅ | ❌ |
-| S mode support | ✅ | ❌ |
-| Tamper resistant | ✅ (kernel) | ❌ |
-| **Microsoft recommendation** | **Preferred** | Supplementary |
+| Windows S mode support | ✅ | ❌ |
+| Tamper resistant | ✅ (kernel-level, can't be bypassed by local admin) | ❌ (user-mode, local admin can disable) |
+| Per-user rules | ❌ (device-wide only) | ✅ |
+| File types controlled | PE (.exe, .dll, .sys), scripts, MSI, packaged apps, COM objects | .exe, .dll, scripts, MSI, packaged apps |
+| **Microsoft recommendation** | **Preferred — primary control** | Supplementary only |
 
-- **Exam tip:** WDAC is ALWAYS the answer for "most secure" or "recommended" application control
-- AppLocker can supplement WDAC but cannot replace it for kernel-mode enforcement
+**Key architectural difference:** WDAC operates as a **kernel-mode code integrity policy** enforced by the Windows kernel itself. Even a local administrator cannot bypass it. AppLocker runs as a **user-mode service** (AppIDSvc) — a local admin can stop the service or modify policies.
+
+##### WDAC Policy Architecture
+
+**Policy types:**
+- **Base policy** — the primary allow/deny list (every system needs one)
+- **Supplemental policies** — extend a base policy with additional rules WITHOUT editing the base
+  - Example: IT deploys a restrictive base policy; a team adds a supplemental policy for their LOB app
+  - Requires base policy to have `AllowSupplementalPolicies` option enabled
+  - **Exam tip:** supplemental policies can ONLY add allow rules, never deny
+
+**Policy modes:**
+- **Audit mode** — logs what WOULD be blocked (Event ID 3076) but allows everything
+  - **Always start here** — deploy audit mode first, analyze logs, then enforce
+- **Enforced mode** — actually blocks unauthorized code (Event ID 3077)
+- **Both modes log to:** `Applications and Services Logs > Microsoft > Windows > CodeIntegrity > Operational`
+
+**Trust authorization options (how WDAC decides what's allowed):**
+
+| Rule Level | What It Trusts | Security Level | Maintenance |
+|------------|---------------|----------------|-------------|
+| **Hash** | Exact file hash | Highest | Breaks on every update |
+| **FileName** | Original filename (PE header) | Medium | Survives renames |
+| **FilePath** | Files in specific directories | Lower | Easy but less secure |
+| **Publisher** | Code signing certificate + publisher | Recommended | Survives updates |
+| **FilePublisher** | Publisher + product + version (≥) | Best balance | Version-aware |
+| **LeafCertificate** | Specific signing certificate | High | Cert-specific |
+| **PcaCertificate** | Root/intermediate CA | Broadest | Trusts entire CA chain |
+| **Intelligent Security Graph (ISG)** | Microsoft's cloud reputation | Convenient | Requires cloud connectivity |
+| **Managed installer** | Anything deployed by SCCM/Intune | Convenient | Trusts your deployment tool |
+
+**Exam-critical rule levels:**
+- **FilePublisher** = Microsoft's recommended default for most orgs (balances security + maintainability)
+- **Hash** = most restrictive but impractical at scale (changes every update)
+- **ISG** = allows apps with good cloud reputation — useful for user-driven environments but trusts Microsoft's judgment
+- **Managed installer** = trusts apps deployed through your management tool (Intune/SCCM) — great for enterprise
+
+##### WDAC Deployment with Intune
+
+1. Create WDAC policy using the **WDAC Wizard** (GUI tool) or PowerShell (`New-CIPolicy`)
+2. Convert to binary: `ConvertFrom-CIPolicy -XmlFilePath policy.xml -BinaryFilePath policy.bin`
+3. Deploy via Intune: **Endpoint security > Application control** OR **Configuration profiles > Custom OMA-URI**
+4. Intune-native application control profile supports:
+   - Trust apps from Microsoft Intelligent Security Graph
+   - Trust apps from managed installer (Intune itself)
+   - Custom WDAC policy upload (.bin file)
+
+**Smart App Control (Windows 11):**
+- Consumer-oriented feature that uses ISG + AI to block untrusted apps
+- Starts in **evaluation mode** → transitions to **enforced** or **off** automatically
+- **Not manageable by enterprise tools** — cannot be re-enabled once turned off
+- **Exam tip:** Smart App Control is NOT the answer for enterprise scenarios — WDAC is
+
+##### AppLocker — When It Still Matters
+
+AppLocker is **not deprecated** but is positioned as supplementary. Scenarios where AppLocker appears on the exam:
+
+1. **Per-user rules needed** — WDAC is device-wide only; AppLocker can target specific users/groups
+   - Example: "Allow Finance group to run app X but not other users" → AppLocker
+2. **Quick script/installer control** — simple rules for blocking script types
+3. **Supplement WDAC** — use AppLocker for user-targeted rules alongside WDAC for device-wide kernel protection
+
+**AppLocker rule types:**
+- **Executable rules** (.exe, .com)
+- **Windows Installer rules** (.msi, .msp, .mst)
+- **Script rules** (.ps1, .bat, .cmd, .vbs, .js)
+- **Packaged app rules** (Microsoft Store apps)
+- **DLL rules** (disabled by default — performance impact)
+
+**AppLocker rule conditions:**
+- Publisher (certificate-based)
+- Path (folder location)
+- File hash (exact match)
+
+##### Adaptive Application Controls (Defender for Cloud)
+
+This is a **separate concept** — part of Defender for Servers **Plan 2** only:
+
+- Machine-learning-based recommendations for which apps SHOULD run on a server
+- Analyzes running processes → creates recommended allowlist
+- Generates alerts when unlisted applications execute
+- Can output **WDAC or AppLocker policies** from recommendations
+- Works for Azure VMs, Arc-enabled servers, and on-prem servers
+
+**Exam scenario:** "Automatically generate application control policies based on actual server behavior" → **Adaptive Application Controls** (requires Defender for Servers Plan 2)
+
+##### Defender for Cloud Apps — Application Governance
+
+Don't confuse with endpoint app control. **Defender for Cloud Apps** (formerly MCAS) handles **SaaS application control:**
+
+- **Cloud app discovery** — identify shadow IT (unsanctioned SaaS apps)
+- **App governance** — monitor OAuth apps registered in Entra ID
+  - Detect overprivileged apps, dormant apps, apps accessing sensitive data
+  - Set policies to auto-disable suspicious OAuth apps
+- **Session controls** (via Conditional Access App Control):
+  - Proxy user sessions through Defender for Cloud Apps
+  - Block downloads, block copy/paste, apply sensitivity labeling, monitor activity
+  - **Exam scenario:** "Prevent users from downloading files from an unmanaged device" → Conditional Access App Control (session policy)
+- **Access controls** — block access to apps based on conditions
+
+##### Conditional Access App Control vs. Endpoint App Control
+
+| Aspect | WDAC / AppLocker | Conditional Access App Control |
+|--------|-----------------|-------------------------------|
+| What it controls | Which executables/scripts run on a device | User sessions within cloud/web apps |
+| Where it runs | Endpoint (OS-level) | Cloud proxy (Defender for Cloud Apps) |
+| Scope | Servers, workstations | SaaS apps, web apps |
+| Example | Block unknown .exe on a server | Block download from SharePoint on unmanaged device |
+
+##### Application Control Decision Tree for SC-100
+
+```
+Need to control which EXECUTABLES run on endpoints?
+├── YES → Is kernel-mode enforcement needed?
+│   ├── YES → WDAC (only option for kernel-mode)
+│   └── NO → Do you need per-user rules?
+│       ├── YES → AppLocker (or AppLocker supplementing WDAC)
+│       └── NO → WDAC (preferred)
+└── NO → Need to control SaaS/cloud app access?
+    ├── YES → Do you need session-level controls (block downloads, etc.)?
+    │   ├── YES → Conditional Access App Control (Defender for Cloud Apps)
+    │   └── NO → Conditional Access (block/grant access) + Cloud App Discovery
+    └── NO → Need auto-generated allowlists for servers?
+        └── YES → Adaptive Application Controls (Defender for Servers Plan 2)
+```
+
+##### Exam Scenarios — Application Control
+
+| Scenario | Answer |
+|----------|--------|
+| "Block unsigned drivers from loading on servers" | WDAC (kernel mode) |
+| "Prevent users in HR from running PowerShell scripts" | AppLocker (per-user script rules) |
+| "Recommend application allowlists based on server behavior" | Adaptive Application Controls (Plan 2) |
+| "Block file downloads from SharePoint on personal devices" | Conditional Access App Control |
+| "Most secure application control for Windows endpoints" | WDAC |
+| "Deploy application control policy via Intune" | WDAC (custom profile or endpoint security) |
+| "Control which apps can run, with minimal policy updates when apps auto-update" | WDAC with FilePublisher rule level |
+| "Trust apps deployed by your management tool automatically" | WDAC with managed installer |
+| "Identify unsanctioned SaaS apps employees are using" | Defender for Cloud Apps (cloud discovery) |
+| "Detect overprivileged OAuth apps in your tenant" | App governance (Defender for Cloud Apps) |
+| "Enterprise-managed application control for Windows 11" | WDAC (not Smart App Control) |
+
+##### Study Resources — Application Control
+- [WDAC design guide](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/design/wdac-design-guide)
+- [WDAC policy rules and file rules](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/design/select-types-of-rules-to-create)
+- [WDAC deployment with Intune](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/deployment/deploy-wdac-policies-using-intune)
+- [WDAC Wizard tool](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/design/wdac-wizard)
+- [AppLocker overview](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/applocker/applocker-overview)
+- [Adaptive application controls](https://learn.microsoft.com/en-us/azure/defender-for-cloud/adaptive-application-controls)
+- [Defender for Cloud Apps session controls](https://learn.microsoft.com/en-us/defender-cloud-apps/proxy-intro-aad)
+- [App governance in Defender for Cloud Apps](https://learn.microsoft.com/en-us/defender-cloud-apps/app-governance-manage-app-governance)
+
+##### Self-Test: Application Control
+1. Why can't a local admin bypass WDAC but can bypass AppLocker?
+2. What's the difference between a WDAC base policy and a supplemental policy?
+3. Which WDAC rule level does Microsoft recommend for most organizations?
+4. You need to auto-generate application allowlists for servers based on observed behavior. What feature and which Defender plan?
+5. A user on a personal (unmanaged) laptop accesses SharePoint. You need to block downloads but allow viewing. What do you use?
+6. When would you use AppLocker INSTEAD of (or alongside) WDAC?
+7. What is the managed installer trust mechanism in WDAC?
+8. How do you deploy a custom WDAC policy to endpoints using Intune?
+9. What's the difference between Conditional Access App Control and WDAC?
+10. An OAuth app in your tenant has excessive permissions and hasn't been used in 90 days. What detects this?
 
 #### Server Hardening
 - **Trusted Launch VMs** — secure boot + vTPM (prevents bootkits/rootkits)

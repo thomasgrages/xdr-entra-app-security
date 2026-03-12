@@ -1,5 +1,9 @@
 {
   "servers": {
+    "context-mode": {
+      "command": "context-mode",
+      "type": "stdio"
+    },
     "MicrosoftLearn": {
       "type": "http",
       "url": "https://learn.microsoft.com/api/mcp"
