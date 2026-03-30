@@ -1,0 +1,36 @@
+{
+  "servers": {
+    "microsoft-learn": {
+      "type": "http",
+      "url": "https://learn.microsoft.com/api/mcp"
+    },
+    "azure": {
+      "type": "http",
+      "url": "https://mcp.azure.com/sse",
+      "headers": {
+        "x-tenant-id": "${input:azure-tenant-id}"
+      }
+    },
+    "microsoft-graph": {
+      "type": "http",
+      "url": "https://mcp.graph.microsoft.com/sse",
+      "headers": {
+        "x-tenant-id": "${input:graph-tenant-id}"
+      }
+    }
+  },
+  "inputs": [
+    {
+      "id": "azure-tenant-id",
+      "type": "promptString",
+      "description": "Azure Tenant ID",
+      "default": "b22dee98-83da-4207-b9ab-5ba931866f44"
+    },
+    {
+      "id": "graph-tenant-id",
+      "type": "promptString",
+      "description": "Microsoft Graph Tenant ID",
+      "default": "b22dee98-83da-4207-b9ab-5ba931866f44"
+    }
+  ]
+}
